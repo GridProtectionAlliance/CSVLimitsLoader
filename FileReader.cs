@@ -76,7 +76,6 @@ namespace CSVLimitsLoader
         private const string DefaultImportLogFilePath = "ImportLog.txt";
         private const int DefaultImportLogFileSize = LogFile.DefaultFileSize;
         private const LogFileFullOperation DefaultImportLogFileFullOperation = LogFile.DefaultFileFullOperation;
-        private const string MeasurementTable = "ActiveMeasurements";
 
         // Fields
         private readonly LongSynchronizedOperation m_importOperation;
@@ -293,6 +292,9 @@ namespace CSVLimitsLoader
             set
             {
                 base.DataSource = value;
+
+                if (!Initialized)
+                    return;
 
                 // This adapter dynamically creates its own measurements and informs the TSF host system about availability.
                 // The data source property is updated anytime TSF reloads its configuration, so we use this as our local
@@ -759,7 +761,7 @@ namespace CSVLimitsLoader
         }
 
         private IMeasurement[] GetUpdatedOutputMeasurements() =>
-            ParseOutputMeasurements(DataSource, false, $"FILTER ActiveMeasurements WHERE DeviceID = {m_parentDeviceRuntimeID}", MeasurementTable);           
+            ParseOutputMeasurements(DataSource, false, $"FILTER ActiveMeasurements WHERE DeviceID = {m_parentDeviceRuntimeID}");
 
         private static string GetCleanAcronym(string acronym) =>
             Regex.Replace(acronym.ToUpperInvariant().Replace(" ", "_"), @"[^A-Z0-9\-!_\.@#\$]", "", RegexOptions.IgnoreCase | RegexOptions.Compiled);
