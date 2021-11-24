@@ -284,6 +284,16 @@ namespace CSVLimitsLoader
         public LogFileFullOperation ImportLogFileFullOperation { get; set; } = DefaultImportLogFileFullOperation;
 
         /// <summary>
+        /// Gets or sets output measurements that the action adapter will produce, if any.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override IMeasurement[] OutputMeasurements // Redeclared to hide property from TSL host manager - property is automatically managed by this adapter
+        {
+            get => base.OutputMeasurements;
+            set => base.OutputMeasurements = value;
+        }
+
+        /// <summary>
         /// Gets or sets <see cref="DataSet"/> based data source available to this <see cref="FileReader"/>.
         /// </summary>
         public override DataSet DataSource
