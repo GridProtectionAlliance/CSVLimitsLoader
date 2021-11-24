@@ -31,7 +31,7 @@ using GSF.Scheduling;
 using GSF.Threading;
 using GSF.TimeSeries;
 using GSF.TimeSeries.Adapters;
-using GSF.TimeSeries.Data;
+using GSF.Units.EE;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -46,7 +46,6 @@ using MeasurementRecord = GSF.TimeSeries.Model.Measurement;
 using SignalTypeRecord = GSF.TimeSeries.Model.SignalType;
 using RuntimeRecord = GSF.TimeSeries.Model.Runtime;
 using SignalType = GSF.Units.EE.SignalType;
-using GSF.Units.EE;
 
 namespace CSVLimitsLoader
 {
@@ -59,6 +58,7 @@ namespace CSVLimitsLoader
         #region [ Members ]
 
         // Constants
+        private const bool DefaultAutoCreateCSVPath = false;
         private const string DefaultImportSchedule = "*/5 * * * *";
         private const double DefaultImportDelay = 30.0D;
         private const string DefaultIDColumns = "0,1";
@@ -84,6 +84,12 @@ namespace CSVLimitsLoader
         private readonly ScheduleManager m_scheduleManager;
         private int m_importDelayInterval;
         private ICancellationToken m_importDelayCancellationToken;
+
+        private int[] m_idColumns;
+        private int[] m_dataColumns;
+        private string[] m_dataSuffixes;
+        private int m_maxColumnMapping;
+
         private long m_totalSuccessfulImports;
         private long m_totalFailedImports;
         private DateTime m_lastSuccessfulImport;
@@ -92,16 +98,15 @@ namespace CSVLimitsLoader
         private long m_totalFailedDeletes;
         private DateTime m_lastSuccessfulDelete;
         private DateTime m_lastFailedDelete;
-        private int[] m_idColumns;
-        private int[] m_dataColumns;
-        private string[] m_dataSuffixes;
-        private int m_maxColumnMapping;
+        private long m_totalNaNValues;
+        
         private string m_parentDeviceAcronym;
         private int m_parentDeviceID;
         private int m_parentDeviceRuntimeID;
         private string m_signalName;
         private int m_signalTypeID;
         private SignalKind m_signalKind;
+        
         private bool m_disposed;
 
         #endregion
@@ -133,6 +138,15 @@ namespace CSVLimitsLoader
         [ConnectionStringParameter]
         [Description("Defines the path and file name of the CSV file to load")]
         public string CSVFilePath { get; set; }
+
+
+        /// <summary>
+        /// Gets or sets the flag that determines if directory defined in CSVFilePath should be attempted to be created if it does not exist.
+        /// </summary>
+        [ConnectionStringParameter]
+        [DefaultValue(DefaultAutoCreateCSVPath)]
+        [Description("Defines the flag that determines if directory defined in CSVFilePath should be attempted to be created if it does not exist")]
+        public bool AutoCreateCSVPath { get; set; } = DefaultAutoCreateCSVPath;
 
         /// <summary>
         /// Gets or sets the schedule, defined by cron syntax, to load updated CSV file data.
@@ -313,6 +327,7 @@ namespace CSVLimitsLoader
                 
                 //                  012345678901234567890123456
                 status.AppendLine($"             CSV File Path: {CSVFilePath}");
+                status.AppendLine($"      Auto-Create CSV Path: {AutoCreateCSVPath}");
                 status.AppendLine($"            Import Logging: {(EnableImportLog ? "Enabled" : "Disabled")}");
                 status.AppendLine($"      Import Log File Path: {ImportLogFilePath}");
                 status.AppendLine($"       Max Import Log Size: {ImportLogFileSize:N0} MB");
@@ -323,6 +338,7 @@ namespace CSVLimitsLoader
                 status.AppendLine($"          CSV Data Columns: {DataColumns}");
                 status.AppendLine($"   Point Tag Data Suffixes: {DataSuffixes}");
                 status.AppendLine($"         Import NaN Values: {ImportNaNValues}");
+                status.AppendLine($"          Total NaN Values: {m_totalNaNValues:N0}");
                 status.AppendLine($"   Delete CSV After Import: {DeleteCSVAfterImport}");
                 status.AppendLine($"         Read Lock Timeout: {ReadLockTimeout:N3} seconds");
                 status.AppendLine($"       Header Rows to Skip: {HeaderRows:N0}");
@@ -437,8 +453,13 @@ namespace CSVLimitsLoader
             string csvFileDirectory = FilePath.GetDirectoryName(CSVFilePath);
 
             if (!Directory.Exists(csvFileDirectory))
-                Directory.CreateDirectory(csvFileDirectory);
-            
+            {
+                if (AutoCreateCSVPath)
+                    Directory.CreateDirectory(csvFileDirectory);
+                else
+                    OnStatusMessage(MessageLevel.Warning, $"Configured path of {nameof(CSVFilePath)} parameter \"{csvFileDirectory}\" does not exist. Scheduled imports may fail.");
+            }
+
             if (FilePath.GetDirectoryName(ImportLogFilePath).Trim() == Path.DirectorySeparatorChar.ToString())
                 ImportLogFilePath = Path.Combine(csvFileDirectory, ImportLogFilePath);
 
@@ -616,18 +637,30 @@ namespace CSVLimitsLoader
                 elements.Add(columns[index]);
 
             string baseTagName = string.Join(".", elements);
+            int rowIndexFactor = (row - 1) * m_dataColumns.Length;
 
             // Create a new measurement for each data column mapping
             for (int i = 0; i < m_dataColumns.Length; i++)
             {
                 int index = m_dataColumns[i];
                 string suffix = m_dataSuffixes[i];
-                string value = columns[index];
+                string value = columns[index].Trim();
 
-                if (double.TryParse(columns[index], out double limit))
+                if (value.Length == 0)
+                    continue;
+
+                if (double.TryParse(value, out double limit))
                 {
+                    if (double.IsNaN(limit))
+                    {
+                        m_totalNaNValues++;
+
+                        if (!ImportNaNValues)
+                            continue;
+                    }
+
                     // Lookup measurement signal ID, creating measurement record if needed
-                    Guid signalID = GetMeasurementSignalID(connection, $"{baseTagName}.{suffix}", ((row - 1) * m_dataColumns.Length) + i + 1);
+                    Guid signalID = GetMeasurementSignalID(connection, $"{baseTagName}.{suffix}", rowIndexFactor + i + 1);
 
                     measurements.Add(new Measurement
                     {
@@ -643,6 +676,40 @@ namespace CSVLimitsLoader
             }
 
             return measurements;
+        }
+
+        // Gets measurement signal ID identified by specified pointTag, creating the measurement record it if needed.
+        private Guid GetMeasurementSignalID(AdoDataConnection connection, string pointTag, int index)
+        {
+            TableOperations<MeasurementRecord> measurementTable = new(connection);
+            string cleanPointTag = GetCleanAcronym(pointTag);
+
+            // Lookup measurement record by point tag, creating a new record if one does not exist
+            MeasurementRecord measurement = measurementTable.QueryRecordWhere("PointTag = {0}", cleanPointTag) ?? measurementTable.NewRecord();
+
+            // Update record fields
+            measurement.DeviceID = m_parentDeviceID;
+            measurement.PointTag = cleanPointTag;
+            measurement.AlternateTag = pointTag;
+            measurement.SignalReference = SignalReference.ToString(m_parentDeviceAcronym, m_signalKind, index);
+            measurement.SignalTypeID = m_signalTypeID;
+            measurement.Adder = MeasurementAdder;
+            measurement.Multiplier = MeasurementMultiplier;
+            measurement.Description = $"{m_parentDeviceAcronym} {m_signalName} #{index} [{pointTag}]";
+
+            // Save record updates
+            measurementTable.AddNewOrUpdateRecord(measurement);
+
+            // Re-query new records to get any database assigned information, e.g., unique Guid-based signal ID
+            if (measurement.PointID == 0)
+            {
+                measurement = measurementTable.QueryRecordWhere("PointTag = {0}", cleanPointTag);
+
+                // Notify host system of configuration changes when a new measurement is created
+                OnConfigurationChanged();
+            }
+
+            return measurement.SignalID;
         }
 
         private void LookupParentDeviceID(AdoDataConnection connection)
@@ -693,40 +760,6 @@ namespace CSVLimitsLoader
 
         private IMeasurement[] GetUpdatedOutputMeasurements() =>
             ParseOutputMeasurements(DataSource, false, $"FILTER ActiveMeasurements WHERE DeviceID = {m_parentDeviceRuntimeID}", MeasurementTable);           
-
-        // Gets measurement signal ID identified by specified pointTag, creating the measurement record it if needed.
-        private Guid GetMeasurementSignalID(AdoDataConnection connection, string pointTag, int index)
-        {
-            TableOperations<MeasurementRecord> measurementTable = new(connection);
-            string cleanPointTag = GetCleanAcronym(pointTag);
-
-            // Lookup measurement record by point tag, creating a new record if one does not exist
-            MeasurementRecord measurement = measurementTable.QueryRecordWhere("PointTag = {0}", cleanPointTag) ?? measurementTable.NewRecord();
-
-            // Update record fields
-            measurement.DeviceID = m_parentDeviceID;
-            measurement.PointTag = cleanPointTag;
-            measurement.AlternateTag = pointTag;
-            measurement.SignalReference = SignalReference.ToString(m_parentDeviceAcronym, m_signalKind, index);
-            measurement.SignalTypeID = m_signalTypeID;
-            measurement.Adder = MeasurementAdder;
-            measurement.Multiplier = MeasurementMultiplier;
-            measurement.Description = $"{m_parentDeviceAcronym} {m_signalName} #{index} [{pointTag}]";
-
-            // Save record updates
-            measurementTable.AddNewOrUpdateRecord(measurement);
-
-            // Re-query new records to get any database assigned information, e.g., unique Guid-based signal ID
-            if (measurement.PointID == 0)
-            {
-                measurement = measurementTable.QueryRecordWhere("PointTag = {0}", cleanPointTag);
-
-                // Notify host system of configuration changes when a new measurement is created
-                OnConfigurationChanged();
-            }
-
-            return measurement.SignalID;
-        }
 
         private static string GetCleanAcronym(string acronym) =>
             Regex.Replace(acronym.ToUpperInvariant().Replace(" ", "_"), @"[^A-Z0-9\-!_\.@#\$]", "", RegexOptions.IgnoreCase | RegexOptions.Compiled);
