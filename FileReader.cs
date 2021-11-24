@@ -340,7 +340,7 @@ namespace CSVLimitsLoader
                 status.AppendLine($"          CSV Data Columns: {DataColumns}");
                 status.AppendLine($"   Point Tag Data Suffixes: {DataSuffixes}");
                 status.AppendLine($"         Import NaN Values: {ImportNaNValues}");
-                status.AppendLine($"          Total NaN Values: {m_totalNaNValues:N0}");
+                status.AppendLine($"     Total Read NaN Values: {m_totalNaNValues:N0}");
                 status.AppendLine($"   Delete CSV After Import: {DeleteCSVAfterImport}");
                 status.AppendLine($"         Read Lock Timeout: {ReadLockTimeout:N3} seconds");
                 status.AppendLine($"       Header Rows to Skip: {HeaderRows:N0}");
@@ -702,7 +702,7 @@ namespace CSVLimitsLoader
             // Save record updates
             measurementTable.AddNewOrUpdateRecord(measurement);
 
-            // Re-query new records to get any database assigned information, e.g., unique Guid-based signal ID
+            // Re-query new records to get any database assigned information, e.g., PointID field or possibly updated SignalID
             if (measurement.PointID == 0)
             {
                 measurement = measurementTable.QueryRecordWhere("PointTag = {0}", cleanPointTag);
@@ -727,7 +727,7 @@ namespace CSVLimitsLoader
 
                 // Using Device.Name field to create a reference to a virtual device using this adapter's runtime ID - this way
                 // the acronym of the virtual device can be synchronized to the custom input adapter's acronym while keeping all
-                // existing associated measurements when the custom adapter acronym gets updated.
+                // existing associated measurements even when the custom adapter acronym gets updated.
                 DeviceRecord device = deviceTable.QueryRecordWhere("Name = {0}", deviceReference) ?? deviceTable.NewRecord();
 
                 m_parentDeviceAcronym = GetCleanAcronym(string.Format(ParentDeviceAcronymTemplate, Name));
