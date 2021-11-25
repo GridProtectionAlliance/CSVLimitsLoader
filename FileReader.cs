@@ -176,7 +176,7 @@ namespace CSVLimitsLoader
         /// </summary>
         [ConnectionStringParameter]
         [DefaultValue(DefaultDataColumns)]
-        [Description("Defines the comma separated, zero-based, column indexes in the CSV that contain import data")]
+        [Description("Defines the comma separated, zero-based, column indexes in the CSV that contain import data; number of values must match DataSuffixes")]
         public string DataColumns { get; set; } = DefaultDataColumns;
 
         /// <summary>
@@ -184,7 +184,7 @@ namespace CSVLimitsLoader
         /// </summary>
         [ConnectionStringParameter]
         [DefaultValue(DefaultDataSuffixes)]
-        [Description("Defines the comma separated point tag suffixes for each defined data column")]
+        [Description("Defines the comma separated point tag suffixes for each defined data column; number of values must match DataColumns")]
         public string DataSuffixes { get; set; } = DefaultDataSuffixes;
 
         /// <summary>
@@ -200,7 +200,7 @@ namespace CSVLimitsLoader
         /// </summary>
         [ConnectionStringParameter]
         [DefaultValue(DefaultDeleteCSVAfterImport)]
-        [Description("Defines the flag that determines if encountered NaN values should be imported")]
+        [Description("Defines the flag that determines if CSV file should deleted after import")]
         public bool DeleteCSVAfterImport { get; set; } = DefaultDeleteCSVAfterImport;
 
         /// <summary>
@@ -223,7 +223,7 @@ namespace CSVLimitsLoader
         /// Gets or sets template for the parent device acronym used to group associated output measurements.
         /// </summary>
         [ConnectionStringParameter]
-        [Description("Defines template for the parent device acronym used to group associated output measurements, typically an expression like \"" + DefaultParentDeviceAcronymTemplate + "\" where \"{0}\" is substituted with this adapter's name.")]
+        [Description("Defines template for the parent device acronym used to group associated output measurements, typically an expression like \"" + DefaultParentDeviceAcronymTemplate + "\" where \"{0}\" is substituted with this adapter's name")]
         [DefaultValue(DefaultParentDeviceAcronymTemplate)]
         public virtual string ParentDeviceAcronymTemplate { get; set; } = DefaultParentDeviceAcronymTemplate;
 

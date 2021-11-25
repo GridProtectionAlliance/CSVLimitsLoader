@@ -4,7 +4,7 @@
 
 This adapter can be deployed with any application that is based on the [Grid Solutions Framework](https://github.com/GridProtectionAlliance/gsf) - [Time-Series Library](https://www.gridprotectionalliance.org/technology.asp#TSL). This includes products like the [openPDC](https://github.com/GridProtectionAlliance/openPDC), [SIEGate](https://github.com/GridProtectionAlliance/SIEGate) and the [openHistorian](https://github.com/GridProtectionAlliance/openHistorian).
 
-To use the adapter, download the [release](releases/latest) associated with your product version and the unzip the assembly (`CSVLimitsLoader.dll`) into the product installation folder, e.g., `C:\Program Files\openPDC\`. Note that it may be necessary to [unblock](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/unblock-file?view=powershell-7.2) the DLL downloaded from the Internet before the TSL host application can use the adapter. It may be necessary to restart the host product after unblocking the assembly.
+To use the adapter, download the [release](releases/latest) associated with your product version and the unzip the assembly (`CSVLimitsLoader.dll`) into the product installation folder, e.g., `C:\Program Files\openPDC\`. Note that it may be necessary to [unblock](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/unblock-file?view=powershell-7.2) the DLL downloaded from the Internet before the TSL host application can use the adapter. Restarting the host product service after unblocking the assembly is recommended.
 
 To configure a new instance of the adapter, follow these steps:
 
@@ -20,7 +20,22 @@ To configure a new instance of the adapter, follow these steps:
 
 | Connection String Parameter | Description | Required? | Default |
 |:---------------------------:|:------------|:---------:|:-------:|
-| CSVFilePath | Defines the path and file name of the CSV file to load | Yes | N/A |
-| AutoCreateCSVPath | Defines the flag that determines if directory defined in CSVFilePath should be attempted to be created if it does not exist | No | False |
-
-TODO: Add remaining properties...
+| `CSVFilePath` | Defines the path and file name of the CSV file to load | Yes | N/A |
+| `AutoCreateCSVPath` | Defines the flag that determines if directory defined in `CSVFilePath` should be attempted to be created if it does not exist | No | False |
+| `ImportSchedule` | Defines the schedule, defined by cron syntax, to load updated CSV file data | No | */5 * * * * |
+| `ImportDelay` | Defines the delay, in seconds, to postpone top-of-minute CSV imports to reduce read/write contention; value should be less than 60 | No | 30.0 |
+| `IDColumns` | Defines the comma separated, zero-based, column indexes in the CSV that contain import IDs | No | 0, 1 |
+| `DataColumns` | Defines the comma separated, zero-based, column indexes in the CSV that contain import data; number of values must match `DataSuffixes` | No | 10, 11, 12, 13 |
+| `DataSuffixes` | Defines the comma separated point tag suffixes for each defined data column; number of values must match `DataColumns` | No | HighAlert, HighWarning, LowWarning, LowAlert |
+| `ImportNaNValues` | Defines the flag that determines if encountered `NaN` values should be imported | No | false |
+| `DeleteCSVAfterImport` | Defines the flag that determines if CSV file should deleted after import | No | false |
+| `ReadLockTimeout` | Defines the timeout, in seconds, to wait before timing out while attempting acquire a read lock on CSV file | No | 5.0 |
+| `HeaderRows` | Defines the number of headers that should be skipped before reading CSV file data | No | 1 |
+| `ParentDeviceAcronymTemplate` | Defines template for the parent device acronym used to group associated output measurements, typically an expression like "LIMITS!{0}" where "{0}" is substituted with this adapter's name | No | LIMITS!{0} |
+| `MeasurementAdder` | Defines the additive offset that should be used for newly created output measurements | No | 0.0 |
+| `MeasurementMultiplier` | Defines the multiplicative offset that should be used for newly created output measurements | No | 1000000.0 |
+| `MeasurementSignalType` | Defines the signal type that should be used for newly created output measurements | No | ALOG |
+| `EnableImportLog` | Defines the flag that determines if log should be maintained for import operations | No | true |
+| `ImportLogFilePath` | Defines the import log file name and optional path; exclude path to write to same location as `CSVFilePath` | No | ImportLog.txt |
+| `ImportLogFileSize` | Defines the maximum file size of the import log in megabytes; value must be between 1 and 10 | No | 3 |
+| `ImportLogFileFullOperation` | Defines the type of operation to be performed when the import log file is full | No | Truncate |
