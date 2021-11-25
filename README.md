@@ -39,3 +39,12 @@ To configure a new instance of the adapter, follow these steps:
 | `ImportLogFilePath` | Defines the import log file name and optional path; exclude path to write to same location as `CSVFilePath` | No | ImportLog.txt |
 | `ImportLogFileSize` | Defines the maximum file size of the import log in megabytes; value must be between 1 and 10 | No | 3 |
 | `ImportLogFileFullOperation` | Defines the type of operation to be performed when the import log file is full | No | Truncate |
+
+This adapter can work with importing multiple CSV values per row, here is an example based on adapter defaults:
+
+| MeasurementPoint (0) | Quantity (1) | Units (2) | HighAlertEL (3) | HighWarningEL (4) | LowWarningEL (5) | LowAlertEL (6) | TimeGroupID (7) | ExportY/N (8) | PointNumber (9) | HighAlert (10) | HighWarning (11) | LowWarning (12)| LowAlert (13) | UNITS (14) |
+|:----------------:|----------|:-----:|:-----------:|:-------------:|:------------:|:----------:|:-----------:|:----------:|:-----------:|:---------:|:----------:|:---------:|:--------:|:-----:|
+| FF.TL77008 | ThreePhase.Power.Apparent | VA | 650000000 | 600000000 | -600000000 | -650000000 | Apparent | Y  |766201  |NaN | 912 | -912 | NaN | MVAC |
+| GG.TL88016 | ThreePhase.Power.Reactive | Var | 650000000 | 600000000 | -600000000 | -650000000 | Reactive | Y | 766002 | NaN | 365 | -365 | NaN | MVAR |
+| HH.TL99032 | ThreePhase.Power.Real  | W | 650000000 | 590000000 | -600000000 | -650000000 | Real | Y | 766003 | NaN | 912 | -912 | NaN | MW |
+
