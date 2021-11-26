@@ -10,7 +10,7 @@ To configure a new instance of the adapter, follow these steps:
 
 1) In the TSL host "Manager" application (e.g., the openPDC Manager UI), access the `Custom Inputs Adapter` page, commonly `Inputs > Manage Custom Inputs` from the main menu.
 2) Click the `Add New` button located on the right side of the screen right above the table of current adapters.
-3) Type in a new `Name` for the adapter, e.g., `VOLTAGELOADER`.
+3) Type in a new `Name` for the adapter, e.g., `POWERLOADER`.
 4) Select the `CSV Limits Loader` adapter from the `Type` drop-down list.
 5) Assign desired values to the adapter `Connection String Parameters` - see table below.
 6) Check the `Enabled` check-box located above the `Delete`, `Add New` and `Save` buttons.
@@ -42,9 +42,25 @@ To configure a new instance of the adapter, follow these steps:
 
 This adapter can work with importing multiple CSV values per row, here is an example based on adapter defaults:
 
-| MeasurementPoint (0) | Quantity (1) | Units (2) | HighAlertEL (3) | HighWarningEL (4) | LowWarningEL (5) | LowAlertEL (6) | TimeGroupID (7) | ExportY/N (8) | PointNumber (9) | HighAlert (10) | HighWarning (11) | LowWarning (12)| LowAlert (13) | UNITS (14) |
+| Measurement Point (0) | Quantity (1) | Units (2) | High Alert EL (3) | High Warning EL (4) | Low Warning EL (5) | Low Alert EL (6) | Time Group ID (7) | ExportY/N (8) | Point Number (9) | High Alert (10) | High Warning (11) | Low Warning (12)| Low Alert (13) | UNITS (14) |
 |:----------------:|----------|:-----:|:-----------:|:-------------:|:------------:|:----------:|:-----------:|:----------:|:-----------:|:---------:|:----------:|:---------:|:--------:|:-----:|
 | FF.TL77008 | ThreePhase.Power.Apparent | VA | 650000000 | 600000000 | -600000000 | -650000000 | Apparent | Y  |766201  |NaN | 912 | -912 | NaN | MVAC |
 | GG.TL88016 | ThreePhase.Power.Reactive | Var | 650000000 | 600000000 | -600000000 | -650000000 | Reactive | Y | 766002 | NaN | 365 | -365 | NaN | MVAR |
 | HH.TL99032 | ThreePhase.Power.Real  | W | 650000000 | 590000000 | -600000000 | -650000000 | Real | Y | 766003 | NaN | 912 | -912 | NaN | MW |
 
+The table above with default adapter settings and an adapter name of `POWERLOADER` would auto-create the following measurements:
+
+| PointTag | SignalReference |
+|----------|-----------------|
+| FF.TL77008.THREEPHASE.POWER.APPARENT.HIGHALERT | LIMITS!POWERLOADER-AV1 |
+| FF.TL77008.THREEPHASE.POWER.APPARENT.HIGHWARNING | LIMITS!POWERLOADER-AV2 |
+| FF.TL77008.THREEPHASE.POWER.APPARENT.LOWWARNING | LIMITS!POWERLOADER-AV3 |
+| FF.TL77008.THREEPHASE.POWER.APPARENT.LOWALERT | LIMITS!POWERLOADER-AV4 |
+| GG.TL88016.THREEPHASE.POWER.REACTIVE.HIGHALERT | LIMITS!POWERLOADER-AV5 |
+| GG.TL88016.THREEPHASE.POWER.REACTIVE.HIGHWARNING | LIMITS!POWERLOADER-AV6 |
+| GG.TL88016.THREEPHASE.POWER.REACTIVE.LOWWARNING | LIMITS!POWERLOADER-AV7 |
+| GG.TL88016.THREEPHASE.POWER.REACTIVE.LOWALERT | LIMITS!POWERLOADER-AV8 |
+| HH.TL99032.THREEPHASE.POWER.REAL.HIGHALERT | LIMITS!POWERLOADER-AV9 |
+| HH.TL99032.THREEPHASE.POWER.REAL.HIGHWARNING | LIMITS!POWERLOADER-AV10 |
+| HH.TL99032.THREEPHASE.POWER.REAL.LOWWARNING | LIMITS!POWERLOADER-AV11 |
+| HH.TL99032.THREEPHASE.POWER.REAL.LOWALERT | LIMITS!POWERLOADER-AV12 |
