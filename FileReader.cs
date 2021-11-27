@@ -47,6 +47,8 @@ using SignalTypeRecord = GSF.TimeSeries.Model.SignalType;
 using RuntimeRecord = GSF.TimeSeries.Model.Runtime;
 using SignalType = GSF.Units.EE.SignalType;
 
+#pragma warning disable CA1031 // Do not catch general exception types
+
 namespace CSVLimitsLoader
 {
     /// <summary>
@@ -137,7 +139,6 @@ namespace CSVLimitsLoader
         [ConnectionStringParameter]
         [Description("Defines the path and file name of the CSV file to load")]
         public string CSVFilePath { get; set; }
-
 
         /// <summary>
         /// Gets or sets the flag that determines if directory defined in CSVFilePath should be attempted to be created if it does not exist.
@@ -432,7 +433,7 @@ namespace CSVLimitsLoader
             if (m_dataSuffixes.Length == 0)
                 throw new InvalidOperationException($"No {nameof(DataSuffixes)} were configured");
 
-            if (m_dataColumns.Length != m_dataColumns.Length)
+            if (m_dataColumns.Length != m_dataSuffixes.Length)
                 throw new InvalidOperationException($"Configured {nameof(DataColumns)} and {nameof(DataSuffixes)} must be the same length");
 
             m_maxColumnMapping = m_idColumns.Concat(m_dataColumns).Max() + 1;
@@ -440,8 +441,8 @@ namespace CSVLimitsLoader
             // Open database connection as defined in configuration file "systemSettings" category
             using AdoDataConnection connection = new("systemSettings");
 
-            // Get device ID of virtual parent device, creating it if needed, for output measurement associations
-            LookupParentDeviceID(connection);
+            // Lookup virtual parent device details, creating device if needed, for output measurement associations
+            LookupParentDeviceDetails(connection);
 
             // Cache queried signal type info for configured MeasurementSignalType
             TableOperations<SignalTypeRecord> signalTypeTable = new(connection);
@@ -492,6 +493,44 @@ namespace CSVLimitsLoader
             m_importLog.FileFullOperation = ImportLogFileFullOperation;
 
             m_scheduleManager.AddSchedule(nameof(FileReader), ImportSchedule, true);
+        }
+
+        private void LookupParentDeviceDetails(AdoDataConnection connection)
+        {
+            try
+            {
+                const string DeviceReferenceTemplate = nameof(CSVLimitsLoader) + "." + nameof(FileReader) + "!{0}";
+
+                // Create a virtual parent device for output measurements association. This will group all output measurements
+                // for this custom input adapter with the virtual device and make the measurements transportable via STTP.
+                TableOperations<DeviceRecord> deviceTable = new(connection);
+                string deviceReference = string.Format(DeviceReferenceTemplate, ID);
+
+                // Using Device.Name field to create a reference to a virtual device using this adapter's runtime ID - this way
+                // the acronym of the virtual device can be synchronized to the custom input adapter's acronym while keeping all
+                // existing associated measurements even when the custom adapter acronym gets updated.
+                DeviceRecord device = deviceTable.QueryRecordWhere("Name = {0}", deviceReference) ?? deviceTable.NewRecord();
+
+                m_parentDeviceAcronym = GetCleanAcronym(string.Format(ParentDeviceAcronymTemplate, Name));
+
+                device.Acronym = m_parentDeviceAcronym;
+                device.Name = deviceReference;
+                device.ProtocolID = connection.ExecuteScalar<int?>("SELECT ID FROM Protocol WHERE Acronym = 'VirtualInput'") ?? 11;
+                device.ConnectionString = $"note={{Do not edit name \"{deviceReference}\". Value used to cross-reference custom input adapter \"{Name}\".}}";
+                device.Enabled = true;
+
+                deviceTable.AddNewOrUpdateRecord(device);
+
+                m_parentDeviceID = device.ID == 0 ? deviceTable.QueryRecordWhere("Name = {0}", deviceReference).ID : device.ID;
+                m_parentDeviceRuntimeID = GetRuntimeID("Device", m_parentDeviceID);
+
+                // Attempt to assign any pre-existing associated output measurements
+                OutputMeasurements = GetUpdatedOutputMeasurements();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to get parent device ID: {ex.Message}", ex);
+            }
         }
 
         /// <summary>
@@ -607,29 +646,28 @@ namespace CSVLimitsLoader
                 OnProcessException(MessageLevel.Error, ex, "CSV Import");
             }
 
-            if (DeleteCSVAfterImport)
+            if (!DeleteCSVAfterImport)
+                return;
+
+            try
             {
-                try
-                {
-                    File.Delete(CSVFilePath);
+                File.Delete(CSVFilePath);
 
-                    m_totalSuccessfulDeletes++;
-                    m_lastSuccessfulDelete = DateTime.Now;
+                m_totalSuccessfulDeletes++;
+                m_lastSuccessfulDelete = DateTime.Now;
 
-                    if (EnableImportLog)
-                        m_importLog.WriteTimestampedLine($"Successful Post Import CSV Delete. Totals: {m_totalSuccessfulDeletes:N0} successful, {m_totalFailedDeletes:N0} failed.");
-                }
-                catch (Exception ex)
-                {
-                    m_totalFailedDeletes++;
-                    m_lastFailedDelete = DateTime.Now;
+                if (EnableImportLog)
+                    m_importLog.WriteTimestampedLine($"Successful Post Import CSV Delete. Totals: {m_totalSuccessfulDeletes:N0} successful, {m_totalFailedDeletes:N0} failed.");
+            }
+            catch (Exception ex)
+            {
+                m_totalFailedDeletes++;
+                m_lastFailedDelete = DateTime.Now;
 
-                    if (EnableImportLog)
-                        m_importLog.WriteTimestampedLine($"ERROR: Failed Post Import CSV Delete. Totals: {m_totalSuccessfulDeletes:N0} successful, {m_totalFailedDeletes:N0} failed.{Environment.NewLine}    >> {ex.Message}");
+                if (EnableImportLog)
+                    m_importLog.WriteTimestampedLine($"ERROR: Failed Post Import CSV Delete. Totals: {m_totalSuccessfulDeletes:N0} successful, {m_totalFailedDeletes:N0} failed.{Environment.NewLine}    >> {ex.Message}");
 
-
-                    OnProcessException(MessageLevel.Error, ex, "Post Import CSV Delete");
-                }
+                OnProcessException(MessageLevel.Error, ex, "Post Import CSV Delete");
             }
         }
 
@@ -643,12 +681,7 @@ namespace CSVLimitsLoader
                 throw new InvalidOperationException($"Not enough columns in CSV row {row:N0} to map configured ID and data columns.");
 
             // Create base measurement point tag name from ID column mappings
-            List<string> elements = new();
-
-            foreach (int index in m_idColumns)
-                elements.Add(columns[index]);
-
-            string baseTagName = string.Join(".", elements);
+            string baseTagName = string.Join(".", m_idColumns.Select(index => columns[index]));
             int rowIndexFactor = (row - 1) * m_dataColumns.Length;
 
             // Create a new measurement for each data column mapping
@@ -722,44 +755,6 @@ namespace CSVLimitsLoader
             }
 
             return measurement.SignalID;
-        }
-
-        private void LookupParentDeviceID(AdoDataConnection connection)
-        {
-            try
-            {
-                const string DeviceReferenceTemplate = nameof(CSVLimitsLoader) + "." + nameof(FileReader) + "!{0}";
-
-                // Create a virtual parent device for output measurements association. This will group all output measurements
-                // for this custom input adapter with the virtual device and make the measurements transportable via STTP.
-                TableOperations<DeviceRecord> deviceTable = new(connection);
-                string deviceReference = string.Format(DeviceReferenceTemplate, ID);
-
-                // Using Device.Name field to create a reference to a virtual device using this adapter's runtime ID - this way
-                // the acronym of the virtual device can be synchronized to the custom input adapter's acronym while keeping all
-                // existing associated measurements even when the custom adapter acronym gets updated.
-                DeviceRecord device = deviceTable.QueryRecordWhere("Name = {0}", deviceReference) ?? deviceTable.NewRecord();
-
-                m_parentDeviceAcronym = GetCleanAcronym(string.Format(ParentDeviceAcronymTemplate, Name));
-
-                device.Acronym = m_parentDeviceAcronym;
-                device.Name = deviceReference;
-                device.ProtocolID = connection.ExecuteScalar<int?>("SELECT ID FROM Protocol WHERE Acronym = 'VirtualInput'") ?? 11;
-                device.ConnectionString = $"note={{Do not edit name \"{deviceReference}\". Value used to cross-reference custom input adapter \"{Name}\".}}";
-                device.Enabled = true;
-
-                deviceTable.AddNewOrUpdateRecord(device);
-
-                m_parentDeviceID = device.ID == 0 ? deviceTable.QueryRecordWhere("Name = {0}", deviceReference).ID : device.ID;
-                m_parentDeviceRuntimeID = GetRuntimeID("Device", m_parentDeviceID);
-
-                // Attempt to assign any pre-existing associated output measurements
-                OutputMeasurements = GetUpdatedOutputMeasurements();
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Failed to get parent device ID: {ex.Message}", ex);
-            }
         }
 
         private int GetRuntimeID(string source, int id)
