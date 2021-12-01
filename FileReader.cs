@@ -27,6 +27,7 @@ using GSF.Diagnostics;
 using GSF.Data;
 using GSF.Data.Model;
 using GSF.IO;
+using GSF.Security;
 using GSF.Scheduling;
 using GSF.Threading;
 using GSF.TimeSeries;
@@ -41,6 +42,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using static CSVLimitsLoader.Model.GlobalSettings;
 using DeviceRecord = GSF.TimeSeries.Model.Device;
 using MeasurementRecord = GSF.TimeSeries.Model.Measurement;
 using SignalTypeRecord = GSF.TimeSeries.Model.SignalType;
@@ -75,7 +77,7 @@ namespace CSVLimitsLoader
         private const double DefaultMeasurementMultiplier = 1000000.0D;
         private const SignalType DefaultMeasurementSignalType = SignalType.ALOG;
         private const bool DefaultEnableImportLog = true;
-        private const string DefaultImportLogFilePath = "ImportLog.txt";
+        private const string DefaultImportLogFilePath = "{0}-ImportLog.txt";
         private const int DefaultImportLogFileSize = LogFile.DefaultFileSize;
         private const LogFileFullOperation DefaultImportLogFileFullOperation = LogFile.DefaultFileFullOperation;
 
@@ -91,6 +93,7 @@ namespace CSVLimitsLoader
         private string[] m_dataSuffixes;
         private int m_maxColumnMapping;
 
+        private long m_measurementRecordsCreated;
         private long m_totalSuccessfulImports;
         private long m_totalFailedImports;
         private DateTime m_lastSuccessfulImport;
@@ -265,7 +268,7 @@ namespace CSVLimitsLoader
         /// </summary>
         [ConnectionStringParameter]
         [DefaultValue(DefaultImportLogFilePath)]
-        [Description("Defines the import log file name and optional path; exclude path to write to same location as CSVFilePath")]
+        [Description("Defines the import log file name and optional path, typically an expression like \"" + DefaultImportLogFilePath + "\" where \"{0}\" is substituted with this adapter's name; exclude path to write to same location as CSVFilePath")]
         public string ImportLogFilePath { get; set; } = DefaultImportLogFilePath;
 
         /// <summary>
@@ -359,6 +362,7 @@ namespace CSVLimitsLoader
                 status.AppendLine($"         Measurement Adder: {MeasurementAdder:N3}");
                 status.AppendLine($"    Measurement Multiplier: {MeasurementMultiplier:N3}");
                 status.AppendLine($"   Measurement Signal Type: {MeasurementSignalType}");
+                status.AppendLine($"   New Measurement Records: {m_measurementRecordsCreated:N0} added over {RunTime.ToString(-1)}");
                 status.AppendLine($"  Total Successful Imports: {m_totalSuccessfulImports:N0}");
                 status.AppendLine($"    Last Successful Import: {(m_lastSuccessfulImport == default ? "Never" : $"{m_lastSuccessfulImport:yyyy-MM-dd HH:mm:ss.fff}")}");
                 status.AppendLine($"      Total Failed Imports: {m_totalFailedImports:N0}");
@@ -385,7 +389,7 @@ namespace CSVLimitsLoader
                 if (EnableImportLog)
                 {
                     status.AppendLine();
-                    status.AppendLine("      -- Import Log Status --");
+                    status.AppendLine("       -- Import Log Status --");
                     status.AppendLine();
                     status.Append(m_importLog.Status);
                 }
@@ -473,6 +477,8 @@ namespace CSVLimitsLoader
                     OnStatusMessage(MessageLevel.Warning, $"Configured path of {nameof(CSVFilePath)} parameter \"{csvFileDirectory}\" does not exist. Scheduled imports may fail.");
             }
 
+            ImportLogFilePath = string.Format(ImportLogFilePath, Name);
+
             if (FilePath.GetDirectoryName(ImportLogFilePath).Trim() == Path.DirectorySeparatorChar.ToString())
                 ImportLogFilePath = Path.Combine(csvFileDirectory, ImportLogFilePath);
 
@@ -493,6 +499,48 @@ namespace CSVLimitsLoader
             m_importLog.FileFullOperation = ImportLogFileFullOperation;
 
             m_scheduleManager.AddSchedule(nameof(FileReader), ImportSchedule, true);
+
+            if (!EnableImportLog)
+                return;
+
+            m_importLog.Open();
+            WriteLogMessage($"Starting import operations for {Name}: \"{CSVFilePath}\"");
+        }
+
+        /// <summary>
+        /// Releases the unmanaged resources used by the <see cref="FileReader"/> object and optionally releases the managed resources.
+        /// </summary>
+        /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (m_disposed)
+                return;
+
+            try
+            {
+                if (!disposing)
+                    return;
+
+                WriteLogMessage($"Stopping import operations for {Name}");
+                m_importLog.Flush();
+
+                m_scheduleManager.Dispose();
+                m_importDelayCancellationToken?.Cancel();
+                m_importLog.Dispose();
+            }
+            finally
+            {
+                m_disposed = true;          // Prevent duplicate dispose.
+                base.Dispose(disposing);    // Call base class Dispose().
+            }
+        }
+
+        private void WriteLogMessage(string message)
+        {
+            if (!EnableImportLog || !m_importLog.IsOpen || m_disposed)
+                return;
+
+            m_importLog.WriteTimestampedLine(message);
         }
 
         private void LookupParentDeviceDetails(AdoDataConnection connection)
@@ -513,6 +561,7 @@ namespace CSVLimitsLoader
 
                 m_parentDeviceAcronym = GetCleanAcronym(string.Format(ParentDeviceAcronymTemplate, Name));
 
+                device.NodeID = AdoSecurityProvider.DefaultNodeID;
                 device.Acronym = m_parentDeviceAcronym;
                 device.Name = deviceReference;
                 device.ProtocolID = connection.ExecuteScalar<int?>("SELECT ID FROM Protocol WHERE Acronym = 'VirtualInput'") ?? 11;
@@ -542,49 +591,14 @@ namespace CSVLimitsLoader
         /// <summary>
         /// Attempts to connect to data input source.
         /// </summary>
-        protected override void AttemptConnection()
-        {
+        protected override void AttemptConnection() =>
             m_scheduleManager.Start();
-
-            if (EnableImportLog)
-                m_importLog.Open();
-        }
 
         /// <summary>
         /// Attempts to disconnect from data input source.
         /// </summary>
-        protected override void AttemptDisconnection()
-        {
+        protected override void AttemptDisconnection() =>
             m_scheduleManager.Stop();
-
-            if (EnableImportLog)
-                m_importLog.Close();
-        }
-
-        /// <summary>
-        /// Releases the unmanaged resources used by the <see cref="FileReader"/> object and optionally releases the managed resources.
-        /// </summary>
-        /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
-        protected override void Dispose(bool disposing)
-        {
-            if (m_disposed)
-                return;
-
-            try
-            {
-                if (!disposing)
-                    return;
-
-                m_scheduleManager.Dispose();
-                m_importDelayCancellationToken?.Cancel();
-                m_importLog.Dispose();
-            }
-            finally
-            {
-                m_disposed = true;          // Prevent duplicate dispose.
-                base.Dispose(disposing);    // Call base class Dispose().
-            }
-        }
 
         /// <summary>
         /// Queues the CSV limits file for import.
@@ -597,6 +611,8 @@ namespace CSVLimitsLoader
         {
             if (m_disposed)
                 return;
+
+            bool createdNewRecords = false;
 
             try
             {
@@ -617,13 +633,23 @@ namespace CSVLimitsLoader
 
                 string line = reader.ReadLine();
                 int row = 1;
+                int count = 0;
 
                 while (!string.IsNullOrEmpty(line))
                 {
-                    List<IMeasurement> measurements = ParseCSVRow(connection, line, row);
+                    (List<IMeasurement> measurements, int newRecords) = ParseCSVRow(connection, line, row);
+
+                    if (newRecords > 0)
+                    {
+                        m_measurementRecordsCreated += newRecords;
+                        createdNewRecords = true;
+                    }
 
                     if (measurements.Count > 0)
+                    {
                         OnNewMeasurements(measurements);
+                        count += measurements.Count;
+                    }
 
                     line = reader.ReadLine();
                     row++;
@@ -632,18 +658,22 @@ namespace CSVLimitsLoader
                 m_totalSuccessfulImports++;
                 m_lastSuccessfulImport = DateTime.Now;
 
-                if (EnableImportLog)
-                    m_importLog.WriteTimestampedLine($"Successful CSV Import. Totals: {m_totalSuccessfulImports:N0} successful, {m_totalFailedImports:N0} failed.");
+                WriteLogMessage($"Successful CSV Import of {count:N0} Measurements. Totals: {m_totalSuccessfulImports:N0} successful, {m_totalFailedImports:N0} failed.");
+                OnStatusMessage(MessageLevel.Info, $"Successfully imported {count:N0} measurements from \"{CSVFilePath}\".");
             }
             catch (Exception ex)
             {
                 m_totalFailedImports++;
                 m_lastFailedImport = DateTime.Now;
 
-                if (EnableImportLog)
-                    m_importLog.WriteTimestampedLine($"ERROR: Failed CSV Import. Totals: {m_totalSuccessfulImports:N0} successful, {m_totalFailedImports:N0} failed.{Environment.NewLine}    >> {ex.Message}");
-
+                WriteLogMessage($"ERROR: Failed CSV Import. Totals: {m_totalSuccessfulImports:N0} successful, {m_totalFailedImports:N0} failed.{Environment.NewLine}    >> {ex.Message}");
                 OnProcessException(MessageLevel.Error, ex, "CSV Import");
+            }
+            finally
+            {
+                // Notify host system of configuration changes when any new measurements are created
+                if (createdNewRecords)
+                    OnConfigurationChanged();
             }
 
             if (!DeleteCSVAfterImport)
@@ -656,26 +686,25 @@ namespace CSVLimitsLoader
                 m_totalSuccessfulDeletes++;
                 m_lastSuccessfulDelete = DateTime.Now;
 
-                if (EnableImportLog)
-                    m_importLog.WriteTimestampedLine($"Successful Post Import CSV Delete. Totals: {m_totalSuccessfulDeletes:N0} successful, {m_totalFailedDeletes:N0} failed.");
+                WriteLogMessage($"Successful Post Import CSV Delete. Totals: {m_totalSuccessfulDeletes:N0} successful, {m_totalFailedDeletes:N0} failed.");
+                OnStatusMessage(MessageLevel.Info, $"Successfully deleted \"{CSVFilePath}\".");
             }
             catch (Exception ex)
             {
                 m_totalFailedDeletes++;
                 m_lastFailedDelete = DateTime.Now;
 
-                if (EnableImportLog)
-                    m_importLog.WriteTimestampedLine($"ERROR: Failed Post Import CSV Delete. Totals: {m_totalSuccessfulDeletes:N0} successful, {m_totalFailedDeletes:N0} failed.{Environment.NewLine}    >> {ex.Message}");
-
+                WriteLogMessage($"ERROR: Failed Post Import CSV Delete. Totals: {m_totalSuccessfulDeletes:N0} successful, {m_totalFailedDeletes:N0} failed.{Environment.NewLine}    >> {ex.Message}");
                 OnProcessException(MessageLevel.Error, ex, "Post Import CSV Delete");
             }
         }
 
         // Converts the given row of CSV data into output measurements.
-        private List<IMeasurement> ParseCSVRow(AdoDataConnection connection, string line, int row)
+        private (List<IMeasurement>, int) ParseCSVRow(AdoDataConnection connection, string line, int row)
         {
             List<IMeasurement> measurements = new();
-            string[] columns = line.Split(',');
+            string[] columns = line.Split(',');            
+            int newRecords = 0;
 
             if (columns.Length < m_maxColumnMapping)
                 throw new InvalidOperationException($"Not enough columns in CSV row {row:N0} to map configured ID and data columns.");
@@ -694,6 +723,12 @@ namespace CSVLimitsLoader
                 if (value.Length == 0)
                     continue;
 
+                // Lookup measurement signal ID, creating measurement record if needed
+                (Guid signalID, bool newRecord) = GetMeasurementSignalID(connection, $"{baseTagName}.{suffix}", rowIndexFactor + i + 1);
+
+                if (newRecord)
+                    newRecords++;
+
                 if (double.TryParse(value, out double limit))
                 {
                     if (double.IsNaN(limit))
@@ -703,9 +738,6 @@ namespace CSVLimitsLoader
                         if (!ImportNaNValues)
                             continue;
                     }
-
-                    // Lookup measurement signal ID, creating measurement record if needed
-                    Guid signalID = GetMeasurementSignalID(connection, $"{baseTagName}.{suffix}", rowIndexFactor + i + 1);
 
                     measurements.Add(new Measurement
                     {
@@ -720,11 +752,11 @@ namespace CSVLimitsLoader
                 }
             }
 
-            return measurements;
+            return (measurements, newRecords);
         }
 
         // Gets measurement signal ID identified by specified pointTag, creating the measurement record it if needed.
-        private Guid GetMeasurementSignalID(AdoDataConnection connection, string pointTag, int index)
+        private (Guid, bool) GetMeasurementSignalID(AdoDataConnection connection, string pointTag, int index)
         {
             TableOperations<MeasurementRecord> measurementTable = new(connection);
             string cleanPointTag = GetCleanAcronym(pointTag);
@@ -749,12 +781,10 @@ namespace CSVLimitsLoader
             if (measurement.PointID == 0)
             {
                 measurement = measurementTable.QueryRecordWhere("PointTag = {0}", cleanPointTag);
-
-                // Notify host system of configuration changes when a new measurement is created
-                OnConfigurationChanged();
+                return (measurement.SignalID, true);
             }
 
-            return measurement.SignalID;
+            return (measurement.SignalID, false);
         }
 
         private int GetRuntimeID(string source, int id)
@@ -768,6 +798,15 @@ namespace CSVLimitsLoader
         private IMeasurement[] GetUpdatedOutputMeasurements() =>
             ParseOutputMeasurements(DataSource, false, $"FILTER ActiveMeasurements WHERE DeviceID = {m_parentDeviceRuntimeID}");
 
+        #endregion
+
+        #region [ Static ]
+
+        // Static Constructor
+        static FileReader() => 
+            ValidateModelDependencies();
+
+        // Static Methods
         private static string GetCleanAcronym(string acronym) =>
             Regex.Replace(acronym.ToUpperInvariant().Replace(" ", "_"), @"[^A-Z0-9\-!_\.@#\$]", "", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
