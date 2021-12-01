@@ -75,7 +75,7 @@ namespace CSVLimitsLoader
         private const string DefaultParentDeviceAcronymTemplate = "LIMITS!{0}";
         private const double DefaultMeasurementAdder = 0.0D;
         private const double DefaultMeasurementMultiplier = 1000000.0D;
-        private const SignalType DefaultMeasurementSignalType = SignalType.ALOG;
+        private const string DefaultMeasurementSignalType = nameof(SignalType.ALOG);
         private const bool DefaultEnableImportLog = true;
         private const string DefaultImportLogFilePath = "{0}-ImportLog.txt";
         private const int DefaultImportLogFileSize = LogFile.DefaultFileSize;
@@ -251,9 +251,9 @@ namespace CSVLimitsLoader
         /// Gets or sets the signal type that should be used for newly created output measurements.
         /// </summary>
         [ConnectionStringParameter]
-        [DefaultValue(DefaultMeasurementSignalType)]
+        [DefaultValue(typeof(SignalType), DefaultMeasurementSignalType)]
         [Description("Defines the signal type that should be used for newly created output measurements")]
-        public SignalType MeasurementSignalType { get; set; } = DefaultMeasurementSignalType;
+        public SignalType MeasurementSignalType { get; set; } = (SignalType)Enum.Parse(typeof(SignalType), DefaultMeasurementSignalType);
 
         /// <summary>
         /// Gets or sets the flag that determines if log should be maintained for import operations.
