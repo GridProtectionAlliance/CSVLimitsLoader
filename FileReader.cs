@@ -342,17 +342,17 @@ namespace CSVLimitsLoader
                 status.Append(base.Status);
                 
                 //                  012345678901234567890123456
-                status.AppendLine($"             CSV File Path: {CSVFilePath}");
+                status.AppendLine($"             CSV File Path: {FilePath.TrimFileName(CSVFilePath, 51)}");
                 status.AppendLine($"      Auto-Create CSV Path: {AutoCreateCSVPath}");
                 status.AppendLine($"            Import Logging: {(EnableImportLog ? "Enabled" : "Disabled")}");
-                status.AppendLine($"      Import Log File Path: {ImportLogFilePath}");
+                status.AppendLine($"      Import Log File Path: {FilePath.TrimFileName(ImportLogFilePath, 51)}");
                 status.AppendLine($"       Max Import Log Size: {ImportLogFileSize:N0} MB");
                 status.AppendLine($" Import Log Full Operation: {ImportLogFileFullOperation}");
                 status.AppendLine($"  Configured CRON Schedule: {ImportSchedule}");
                 status.AppendLine($"Top-of-Minute Import Delay: {ImportDelay:N3} seconds");
-                status.AppendLine($"            CSV ID Columns: {IDColumns}");
-                status.AppendLine($"          CSV Data Columns: {DataColumns}");
-                status.AppendLine($"   Point Tag Data Suffixes: {DataSuffixes}");
+                status.AppendLine($"            CSV ID Columns: {IDColumns.TrimWithEllipsisEnd(51)}");
+                status.AppendLine($"          CSV Data Columns: {DataColumns.TrimWithEllipsisEnd(51)}");
+                status.AppendLine($"   Point Tag Data Suffixes: {DataSuffixes.TrimWithEllipsisEnd(51)}");
                 status.AppendLine($"         Import NaN Values: {ImportNaNValues}");
                 status.AppendLine($"     Total Read NaN Values: {m_totalNaNValues:N0}");
                 status.AppendLine($"   Delete CSV After Import: {DeleteCSVAfterImport}");
