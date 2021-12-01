@@ -2,7 +2,7 @@
 
 ### Grid Solutions Framework (GSF) Time-series Library (TSL) Adapter for Loading EMS Limits from a CSV File.
 
-This adapter can be deployed with any application that is based on the [Grid Solutions Framework](https://github.com/GridProtectionAlliance/gsf) - [Time-Series Library](https://www.gridprotectionalliance.org/technology.asp#TSL). This includes products like the [openPDC](https://github.com/GridProtectionAlliance/openPDC), [SIEGate](https://github.com/GridProtectionAlliance/SIEGate) and the [openHistorian](https://github.com/GridProtectionAlliance/openHistorian).
+This adapter can be deployed with any application that is based on the [Grid Solutions Framework](https://github.com/GridProtectionAlliance/gsf) - [Time-Series Library](https://www.gridprotectionalliance.org/technology.asp#TSL). This includes products like the [openPDC](https://github.com/GridProtectionAlliance/openPDC), [SIEGate](https://github.com/GridProtectionAlliance/SIEGate), the [openHistorian](https://github.com/GridProtectionAlliance/openHistorian) and [openMIC](https://github.com/GridProtectionAlliance/openMIC).
 
 To use the adapter, download the [release](https://github.com/GridProtectionAlliance/CSVLimitsLoader/releases/latest) associated with your product version and the unzip the assembly (`CSVLimitsLoader.dll`) into the product installation folder, e.g., `C:\Program Files\openPDC\`. Note that it may be necessary to [unblock](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/unblock-file?view=powershell-7.2) the DLL downloaded from the Internet before the TSL host application can use the adapter. Restarting the host product service after unblocking the assembly is recommended.
 
