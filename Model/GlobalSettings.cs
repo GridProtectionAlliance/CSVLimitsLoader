@@ -29,6 +29,7 @@ using System;
 
 namespace CSVLimitsLoader.Model
 {
+    // TODO: Remove class when reference to GSF is > 2.4.7 - code added for Device model to handle its own proxy settings
     internal class GlobalSettings
     {
         public string CompanyAcronym { get; } = s_companyAcronym;
