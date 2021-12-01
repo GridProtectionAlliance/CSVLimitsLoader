@@ -79,7 +79,7 @@ namespace CSVLimitsLoader
         private const bool DefaultEnableImportLog = true;
         private const string DefaultImportLogFilePath = "{0}-ImportLog.txt";
         private const int DefaultImportLogFileSize = LogFile.DefaultFileSize;
-        private const LogFileFullOperation DefaultImportLogFileFullOperation = LogFile.DefaultFileFullOperation;
+        private const string DefaultImportLogFileFullOperation = nameof(LogFileFullOperation.Truncate);
 
         // Fields
         private readonly LongSynchronizedOperation m_importOperation;
@@ -283,9 +283,9 @@ namespace CSVLimitsLoader
         /// Gets or sets the type of operation to be performed when the import log file is full.
         /// </summary>
         [ConnectionStringParameter]
-        [DefaultValue(DefaultImportLogFileFullOperation)]
+        [DefaultValue(typeof(LogFileFullOperation), DefaultImportLogFileFullOperation)]
         [Description("Defines the type of operation to be performed when the import log file is full")]
-        public LogFileFullOperation ImportLogFileFullOperation { get; set; } = DefaultImportLogFileFullOperation;
+        public LogFileFullOperation ImportLogFileFullOperation { get; set; } = (LogFileFullOperation)Enum.Parse(typeof(LogFileFullOperation), DefaultImportLogFileFullOperation);
 
         /// <summary>
         /// Gets or sets output measurements that the action adapter will produce, if any.
