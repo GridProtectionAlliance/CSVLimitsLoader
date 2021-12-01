@@ -47,7 +47,6 @@ using DeviceRecord = GSF.TimeSeries.Model.Device;
 using MeasurementRecord = GSF.TimeSeries.Model.Measurement;
 using SignalTypeRecord = GSF.TimeSeries.Model.SignalType;
 using RuntimeRecord = GSF.TimeSeries.Model.Runtime;
-using SignalType = GSF.Units.EE.SignalType;
 
 #pragma warning disable CA1031 // Do not catch general exception types
 
@@ -561,6 +560,7 @@ namespace CSVLimitsLoader
 
                 m_parentDeviceAcronym = GetCleanAcronym(string.Format(ParentDeviceAcronymTemplate, Name));
 
+                // TODO: Skip NodeID assignment when reference to GSF is > 2.4.7 - default value expression added to Device model
                 device.NodeID = AdoSecurityProvider.DefaultNodeID;
                 device.Acronym = m_parentDeviceAcronym;
                 device.Name = deviceReference;
