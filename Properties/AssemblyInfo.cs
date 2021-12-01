@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("CSVLimitsLoader")]
 [assembly: AssemblyDescription("GSF Time-series Library Adapter for Loading EMS Limits from a CSV File")]
 [assembly: AssemblyCompany("Grid Protection Alliance")]
-[assembly: AssemblyCopyright("Copyright © GPA, 2013.  All Rights Reserved.")]
+[assembly: AssemblyCopyright("Copyright © GPA, 2021.  All Rights Reserved.")]
 [assembly: AssemblyProduct("Grid Solutions Framework")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
