@@ -25,6 +25,7 @@ using ExpressionEvaluator;
 using GSF.ComponentModel;
 using GSF.Configuration;
 using GSF.Diagnostics;
+using GSF.Security;
 using System;
 
 namespace CSVLimitsLoader.Model
@@ -32,9 +33,11 @@ namespace CSVLimitsLoader.Model
     // TODO: Remove class when reference to GSF is > 2.4.7 - code added for Device model to handle its own proxy settings
     internal class GlobalSettings
     {
-        public string CompanyAcronym { get; } = s_companyAcronym;
+        public Guid NodeID => AdoSecurityProvider.DefaultNodeID;
 
-        private readonly static string s_companyAcronym;
+        public string CompanyAcronym => s_companyAcronym;
+
+        private static readonly string s_companyAcronym;
 
         static GlobalSettings()
         {
